@@ -1,0 +1,5 @@
+# Python packages required
+sympy
+numpy
+matplotlib
+jupyter
