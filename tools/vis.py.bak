@@ -92,7 +92,7 @@ class Visualizer:
                     obj['actor'][i]=self.ax.quiver(p[0],p[1],p[2],f[i,0],f[i,1],f[i,2],length=obj['scale'],normalize=False,color=colors[i])                                
                 self.autoscale(p,boundary=obj['scale'])
             elif (isinstance(obj['actor'],mesh.Mesh)): #Mesh
-                self.ax.add_collection3d(mplot3d.art3d.Poly3DCollection(obj['actor'].vectors))
+                self.ax.add_collection3d(mplot3d.art3d.Poly3DCollection(your_mesh.vectors))
                 
                 
         self.ax.set_xlim(xmin=self.xrange[0],xmax=self.xrange[1])      
