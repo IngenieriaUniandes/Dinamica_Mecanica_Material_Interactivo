@@ -8,7 +8,15 @@ from matplotlib.text import Text
 from stl import mesh
 from mpl_toolkits.mplot3d.art3d import Line3D,Line3DCollection
 from stl import mesh
+import copy
 
+def transformationMatrix(rotation,translation):
+    '''Builds a 4x4 transformation matrix form rotation and translation'''
+    translation=np.reshape(translation,(3,1))
+    upper=np.concatenate((rotation,translation),axis=1)
+    lower=np.array([[0,0,0,1]])
+    return np.concatenate((upper,lower))
+    
 class Visualizer:
     textoffset=np.transpose(np.array([[0.1,0.1,0.1]]))
     def __init__(self,baseFrame,origin):
@@ -34,41 +42,42 @@ class Visualizer:
         
         # Will append the dict with matrixeqs,obj,params                
         # This means: create the matplotlib obj, compute the eqs, and fill params
-        
-        # Point
-        actor,=self.ax.plot3D(0,0,0,'b.')
-        obj=dict()
-        obj['actor']=actor
-        obj['eq']=p                
-        self.objs.append(obj)
-        
-        # Text for the point
-        actor=self.ax.text2D(0,0,point.name)        
-        obj=dict()
-        obj['actor']=actor
-        obj['eq']=p                
-        self.objs.append(obj)
-                
-        # Quiver for the frame             
-        actor=list()
-        for i in range(0,3):
-            actor.append(self.ax.quiver3D(0,0,0,0,0,0))
-        obj=dict()
-        obj['actor']=actor
-        obj['eq']=(p,f)
-        obj['scale']=frame_scale        
-        self.objs.append(obj)
-        
-        # Stl mesh
-        obj['mesh']=None
-        if shape!=None:
-            shape_mesh = mesh.Mesh.from_file(shape)
-            shape_mesh.vectors=shape_mesh.vectors*mesh_scale
-            obj['actor']=shape_mesh
-            obj['eq']=(p,f)
-            obj['scale']=mesh_scale
+        if shape==None:
+            # Point
+            actor,=self.ax.plot3D(0,0,0,'b.')
+            obj=dict()
+            obj['actor']=actor
+            obj['eq']=p                
+            self.objs.append(obj)
+            
+            # Text for the point
+            actor=self.ax.text2D(0,0,point.name)        
+            obj=dict()
+            obj['actor']=actor
+            obj['eq']=p                
             self.objs.append(obj)
                     
+            # Quiver for the frame             
+            actor=list()
+            for i in range(0,3):
+                actor.append(self.ax.quiver3D(0,0,0,0,0,0))
+            obj=dict()
+            obj['actor']=actor
+            obj['eq']=(p,f)
+            obj['scale']=frame_scale        
+            self.objs.append(obj)
+        else:
+            # Stl mesh
+            obj=dict()
+            obj['mesh']=None
+            if shape!=None:
+                shape_mesh = mesh.Mesh.from_file(shape)
+                shape_mesh.vectors=shape_mesh.vectors*mesh_scale
+                obj['actor']=shape_mesh
+                obj['eq']=(p,f)
+                obj['scale']=mesh_scale
+                self.objs.append(obj)
+                        
     def plot(self,replacements=dict()):
         '''Collect all the objects and redraw'''            
         for obj in self.objs:          
@@ -90,14 +99,27 @@ class Visualizer:
                 for i in range(0,3):                
                     obj['actor'][i].remove()                    
                     obj['actor'][i]=self.ax.quiver(p[0],p[1],p[2],f[i,0],f[i,1],f[i,2],length=obj['scale'],normalize=False,color=colors[i])                                
-                self.autoscale(p,boundary=obj['scale'])
+                self.autoscale(np.squeeze(p),boundary=obj['scale'])
             elif (isinstance(obj['actor'],mesh.Mesh)): #Mesh
-                self.ax.add_collection3d(mplot3d.art3d.Poly3DCollection(obj['actor'].vectors))
-                
-                
+                if 'surf' in obj:
+                    obj['surf'].remove()
+                p=obj['eq'][0].subs(replacements)
+                p=np.array(p,dtype=np.float64) 
+                f=obj['eq'][1].subs(replacements)
+                f=np.array(f,dtype=np.float64)
+                H=transformationMatrix(np.transpose(f),p)
+                transformedMesh=copy.deepcopy(obj['actor'])
+                transformedMesh.transform(H)
+                obj['surf']=self.ax.add_collection3d(mplot3d.art3d.Poly3DCollection(transformedMesh.vectors))
+                obj['surf'].set_edgecolor(np.array([0.2,0.2,0.2,0.05],dtype=np.float64))
+                obj['surf'].set_facecolor(np.array([0.2,0.2,0.2,0.2],dtype=np.float64))
+                self.autoscale_mesh(transformedMesh)         
+        
+        #Autoscale ax box
         self.ax.set_xlim(xmin=self.xrange[0],xmax=self.xrange[1])      
         self.ax.set_ylim(ymin=self.yrange[0],ymax=self.yrange[1])      
         self.ax.set_zlim(zmin=self.zrange[0],zmax=self.zrange[1])      
+        self.ax.set_box_aspect([self.xrange[1]-self.xrange[0],self.yrange[1]-self.yrange[0],self.zrange[1]-self.zrange[0]])
         
         for obj in self.objs:          
             if (isinstance(obj['actor'],Text)):                                
@@ -110,8 +132,10 @@ class Visualizer:
                 
     def autoscale_mesh(self,mesh):
         '''Computes the axis range based on mesh points data'''
-        scale = mesh.points.flatten('C')
-        print(scale)
+        pmin = np.min(mesh.vectors,axis=(0,1))
+        pmax = np.max(mesh.vectors,axis=(0,1))        
+        self.autoscale(pmin)
+        self.autoscale(pmax)
         
     def autoscale(self,p,boundary=0):
         if p[0]+boundary>self.xrange[1]:
@@ -127,8 +151,8 @@ class Visualizer:
         elif p[2]-boundary<self.zrange[0]:
             self.zrange[0]=p[2]-boundary 
         #Make scaling equal on xyz
-        self.xrange[0]=np.min([self.xrange[0],self.yrange[0],self.xrange[0]])
-        self.xrange[1]=np.max([self.xrange[1],self.yrange[1],self.xrange[1]])
-        self.yrange=self.xrange
-        self.zrange=self.xrange
+        #self.xrange[0]=np.min([self.xrange[0],self.yrange[0],self.xrange[0]])
+        #self.xrange[1]=np.max([self.xrange[1],self.yrange[1],self.xrange[1]])
+        #self.yrange=self.xrange
+        #self.zrange=self.xrange
         
