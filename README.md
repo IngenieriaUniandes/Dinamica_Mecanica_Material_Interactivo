@@ -1,5 +1,5 @@
 # Dinámica Mecánica: Material Interactivo
-Notas con material interactivo para el libro Dinámica Mecánica, segunda edición.
+Notas con material interactivo para el libro Dinámica Mecánica, segunda edición. (Carlos Francisco Rodriguez y Jonathan Camargo).
 
 **Instalación** <br/>
 Descarge o clone el repositorio. Luego, instale las librerías requeridas con <br/>
